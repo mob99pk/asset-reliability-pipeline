@@ -1,0 +1,54 @@
+-- Asset Reliability Pipeline — one-time Snowflake setup.
+-- Run in a Snowsight worksheet as a user holding ACCOUNTADMIN (trial default).
+
+-- 1. Compute + storage (owned by SYSADMIN, per Snowflake best practice)
+USE ROLE SYSADMIN;
+
+CREATE WAREHOUSE IF NOT EXISTS ASSET_WH
+  WAREHOUSE_SIZE = XSMALL
+  AUTO_SUSPEND = 60
+  AUTO_RESUME = TRUE
+  INITIALLY_SUSPENDED = TRUE;
+
+CREATE DATABASE IF NOT EXISTS ASSET_RELIABILITY;
+CREATE SCHEMA IF NOT EXISTS ASSET_RELIABILITY.RAW;   -- landing zone (Python loader)
+CREATE SCHEMA IF NOT EXISTS ASSET_RELIABILITY.CI;    -- dbt builds from pull requests
+CREATE SCHEMA IF NOT EXISTS ASSET_RELIABILITY.PROD;  -- dbt builds from main
+
+-- 2. Functional role for the pipeline
+USE ROLE SECURITYADMIN;
+
+CREATE ROLE IF NOT EXISTS TRANSFORMER;
+GRANT ROLE TRANSFORMER TO ROLE SYSADMIN;  -- keep the role hierarchy intact
+
+GRANT USAGE ON WAREHOUSE ASSET_WH TO ROLE TRANSFORMER;
+GRANT USAGE ON DATABASE ASSET_RELIABILITY TO ROLE TRANSFORMER;
+GRANT ALL ON SCHEMA ASSET_RELIABILITY.RAW  TO ROLE TRANSFORMER;
+GRANT ALL ON SCHEMA ASSET_RELIABILITY.CI   TO ROLE TRANSFORMER;
+GRANT ALL ON SCHEMA ASSET_RELIABILITY.PROD TO ROLE TRANSFORMER;
+
+-- 3. Service user (key-pair auth only — no password)
+USE ROLE USERADMIN;
+
+CREATE USER IF NOT EXISTS DBT_SVC
+  TYPE = SERVICE
+  DEFAULT_ROLE = TRANSFORMER
+  DEFAULT_WAREHOUSE = ASSET_WH
+  COMMENT = 'Loader + dbt (local and GitHub Actions)';
+
+USE ROLE SECURITYADMIN;
+GRANT ROLE TRANSFORMER TO USER DBT_SVC;
+
+-- Let your own login use the role too, so you can browse in Snowsight
+-- (scripting block, not a session variable, so it works however Snowsight runs it)
+EXECUTE IMMEDIATE $$
+BEGIN
+  EXECUTE IMMEDIATE 'GRANT ROLE TRANSFORMER TO USER "' || CURRENT_USER() || '"';
+END;
+$$;
+
+-- 4. Attach the public key (run after generating keys/rsa_key.pub).
+--    Paste the key body only: no BEGIN/END lines, no line breaks.
+-- USE ROLE SECURITYADMIN;
+-- ALTER USER DBT_SVC SET RSA_PUBLIC_KEY = 'MIIBIjANBgkq...';
+-- DESC USER DBT_SVC;  -- RSA_PUBLIC_KEY_FP should now be populated
