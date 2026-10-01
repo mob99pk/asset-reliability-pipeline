@@ -47,6 +47,7 @@ cleaned as (
             when 'COMPLETED'   then 'Completed'
             when 'COMPLETE'    then 'Completed'
             when 'DONE'        then 'Completed'
+            when 'CLOSED'      then 'Completed'
             when 'CANCELLED'   then 'Cancelled'
             when 'CANCELED'    then 'Cancelled'
             else trim(status)
