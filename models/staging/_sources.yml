@@ -1,0 +1,29 @@
+version: 2
+
+sources:
+  - name: raw
+    description: Landing zone loaded by scripts/load_raw.py. All values as received.
+    schema: RAW
+    tables:
+      - name: work_orders
+        description: Work order CSV export, all columns VARCHAR, plus loader lineage columns.
+        columns:
+          - name: wo_id
+            data_tests:
+              - not_null
+              # Duplicates are expected (late delta exports); surfaced here, resolved in staging.
+              - unique:
+                  config:
+                    severity: warn
+          - name: asset_id
+            data_tests:
+              - not_null
+          - name: _row_number
+            description: Row position in the source file; later rows supersede earlier ones.
+
+      - name: assets
+        description: Asset register JSON, one VARIANT per record.
+        columns:
+          - name: raw
+            data_tests:
+              - not_null

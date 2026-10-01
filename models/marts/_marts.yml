@@ -1,0 +1,37 @@
+version: 2
+
+models:
+  - name: asset_reliability_monthly
+    description: >
+      Monthly maintenance KPIs by asset class and site. Work orders on assets missing
+      from the asset register are reported under asset_class/site = 'Unknown'.
+      Work orders with an unparseable raised_date are excluded (see stg_work_orders.dq_issue).
+    columns:
+      - name: month
+        data_tests: [not_null]
+      - name: asset_class
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [Pump, Valve, Pipeline, Reservoir, Meter, Unknown]
+      - name: site
+        data_tests: [not_null]
+      - name: raised
+        description: Work orders raised in the month (all statuses).
+      - name: completed
+        description: Work orders completed in the month.
+      - name: due
+        description: Non-cancelled work orders due in the month whose deadline has passed (as of the run date).
+      - name: completed_on_time
+        description: Of `due`, completed on or before the due date.
+      - name: overdue
+        description: Of `due`, completed after the due date or still open.
+      - name: missing_due_date
+        description: >
+          Non-cancelled work orders raised in the month with no valid due date. These cannot be
+          assessed against an SLA, so they are excluded from due/overdue/compliance and shown here.
+      - name: compliance_pct
+        description: >
+          completed_on_time / due x 100. Completed work orders with no valid completed_date
+          count in `due` but not as on time; compliance has to be evidenced.

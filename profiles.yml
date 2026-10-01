@@ -1,0 +1,22 @@
+# No secrets here: every value comes from environment variables.
+# Locally:  uv run --env-file .env -- dbt build              (target dev  -> DEV)
+# CI:       dbt build --target ci   / --target prod          (-> CI / PROD)
+asset_reliability:
+  target: dev
+  outputs:
+    dev: &snowflake
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      private_key_path: "{{ env_var('SNOWFLAKE_PRIVATE_KEY_PATH') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE') }}"
+      schema: DEV
+      threads: 4
+    ci:
+      <<: *snowflake
+      schema: CI
+    prod:
+      <<: *snowflake
+      schema: PROD

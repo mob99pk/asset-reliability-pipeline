@@ -1,0 +1,71 @@
+version: 2
+
+models:
+  - name: stg_work_orders
+    description: One row per work order. Deduplicated, codes standardised, dates parsed, data-quality issues labelled.
+    columns:
+      - name: wo_id
+        data_tests: [unique, not_null]
+      - name: asset_id
+        data_tests:
+          - not_null
+          # W7: orphans are real in source systems. Warn, don't block; the mart buckets them as 'Unknown'.
+          - relationships:
+              arguments:
+                to: ref('stg_assets')
+                field: asset_id
+              config:
+                severity: warn
+      - name: wo_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [Preventive, Corrective, Inspection, Emergency]
+      - name: priority
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [P1, P2, P3, P4]
+      - name: is_priority_imputed
+        description: True when the source priority was missing and defaulted to P3.
+      - name: status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [Open, In Progress, Completed, Cancelled]
+      - name: raised_date
+        description: Null when the source value was unparseable; such rows are excluded from the mart.
+        data_tests:
+          - not_null:
+              config:
+                severity: warn
+      - name: due_date
+        description: Null when missing or unparseable; counted in the mart as missing_due_date.
+      - name: dq_issue
+        description: Data-quality label; null when the row is clean.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [invalid_raised_date, completed_without_date, completed_before_raised]
+
+  - name: stg_assets
+    description: One row per asset, flattened from nested JSON; latest version by updated_at.
+    columns:
+      - name: asset_id
+        data_tests: [unique, not_null]
+      - name: asset_class
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [Pump, Valve, Pipeline, Reservoir, Meter]
+      - name: criticality
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [High, Medium, Low]
+      - name: site
+        description: "'Unknown' when the source site was null or missing."
+        data_tests: [not_null]
