@@ -1,0 +1,49 @@
+name: dbt CI
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# One shared CI schema: queue runs so two PRs never build into it at once.
+concurrency:
+  group: dbt-ci
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  dbt-build:
+    name: dbt-build  # status check name required by the main branch ruleset
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+      SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+      SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+      SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          uv venv --python 3.12
+          uv pip install -r requirements.txt
+
+      - name: Write Snowflake private key
+        env:
+          SNOWFLAKE_PRIVATE_KEY: ${{ secrets.SNOWFLAKE_PRIVATE_KEY }}
+        run: |
+          umask 077
+          printf '%s\n' "$SNOWFLAKE_PRIVATE_KEY" > "$RUNNER_TEMP/rsa_key.p8"
+          echo "SNOWFLAKE_PRIVATE_KEY_PATH=$RUNNER_TEMP/rsa_key.p8" >> "$GITHUB_ENV"
+
+      - name: dbt build -> CI schema
+        run: uv run --no-project -- dbt build --target ci
